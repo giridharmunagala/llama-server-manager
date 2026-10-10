@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>llama router</title>
+  <script src="/static/theme.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/options.js" defer></script>
+  <script src="/static/decision.js" defer></script>
+  <script src="/static/observability.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#overview" aria-label="llama router home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>llama <strong>router</strong></span>
+      </a>
+      <nav class="tabs" aria-label="Sections">
+        <a href="#overview" data-view="overview">Overview</a>
+        <a href="#models" data-view="models">Models <span id="nav-model-count" class="tab-count"></span></a>
+        <a href="#router" data-view="router">Router setup</a>
+        <a href="#observability" data-view="observability">Observability</a>
+      </nav>
+      <div class="topbar-actions">
+        <button id="open-logs" class="ghost-button small" type="button" title="Open raw server output for troubleshooting">Diagnostics</button>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch theme">☾</button>
+        <div class="status-pill" data-state="connecting">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="state" role="status">Connecting</span>
+        </div>
+        <button id="start" class="primary small" type="button" disabled><span aria-hidden="true">▶</span> Start</button>
+        <button id="stop" class="secondary small danger" type="button" disabled><span class="stop-icon" aria-hidden="true"></span>Stop</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="alerts">
+      <p id="connection-error" class="alert" role="alert" hidden></p>
+      <p id="action-error" class="alert" role="alert" hidden></p>
+      <p id="server-error" class="alert" role="alert" hidden></p>
+    </div>
+    <p id="notice" class="sr-only" role="status"></p>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section id="view-overview" class="view" aria-label="Overview">
+      <div class="overview-grid">
+        <article class="panel status-panel" aria-labelledby="status-title">
+          <div class="status-main">
+            <div class="section-icon" aria-hidden="true"><span></span></div>
+            <div>
+              <p class="label">ROUTER STATUS</p>
+              <h2 id="status-title">Local server</h2>
+              <p id="health">Connecting to the manager...</p>
+            </div>
+          </div>
+          <div class="status-meta">
+            <div><span>MODE</span><strong>Hot swap</strong></div>
+            <div><span>PROCESS</span><strong id="pid">Not running</strong></div>
+            <div><span>PORT</span><strong id="active-port">--</strong></div>
+          </div>
+          <p id="setup-hint" class="setup-hint" hidden></p>
+        </article>
+
+        <article class="panel" aria-labelledby="endpoint-title">
+          <p class="label">CONNECT YOUR APPS</p>
+          <h2 id="endpoint-title">OpenAI-compatible endpoint</h2>
+          <label class="value-field">
+            <span class="sr-only">API base URL</span>
+            <input id="api-url" readonly value="Loading...">
+            <button class="copy" type="button" data-copy="api-url" aria-label="Copy API endpoint">Copy</button>
+          </label>
+          <p class="muted">Connect clients directly to llama.cpp. No proxy or API key. Use a model ID below as the <code>model</code> name; the router loads and swaps models automatically.</p>
+          <a id="router-link" class="router-link" target="_blank" rel="noopener noreferrer">Open llama.cpp web UI ↗</a>
+        </article>
+      </div>
+
+      <article class="panel" aria-labelledby="overview-models-title">
+        <div class="panel-head">
+          <div><p class="label">MODELS</p><h2 id="overview-models-title">Your models</h2></div>
+          <a class="ghost-button" href="#models">Manage models →</a>
+        </div>
+        <div id="overview-models" class="model-tiles"></div>
+      </article>
+    </section>
+
+    <!-- ============ MODELS ============ -->
+    <section id="view-models" class="view models-card" aria-labelledby="models-title" hidden>
+      <h1 id="models-title" class="sr-only">Models &amp; configuration</h1>
+      <fieldset id="catalog-fieldset" class="catalog-layout">
+        <legend class="sr-only">Model configuration</legend>
+        <aside class="model-sidebar" aria-label="Presets">
+          <button id="new-model-button" type="button" class="primary new-model">+ New model</button>
+          <div class="sidebar-title"><span>Models</span><span id="model-count" class="count-pill">0</span></div>
+          <ul id="model-sidebar" class="model-list" role="listbox" aria-label="Models"></ul>
+          <div class="sidebar-title"><span>Applies to all</span></div>
+          <div id="defaults-entry"></div>
+          <p id="router-note" class="muted" role="status"></p>
+        </aside>
+
+        <div class="editor-pane">
+          <div class="editor-head">
+            <div class="editor-title">
+              <p id="editor-kicker" class="label">MODEL</p>
+              <h2 id="editor-name">—</h2>
+              <p id="editor-sub" class="muted"></p>
+            </div>
+            <div class="editor-actions">
+              <span id="editor-live" class="live-chip" hidden></span>
+              <label id="enabled-wrap" class="switch-label" hidden title="Include this model in the router's preset list">
+                <span>Available in router</span>
+                <input id="model-enabled" type="checkbox" class="switch" role="switch">
+              </label>
+              <button id="load-model" type="button" class="ghost-button">Load now</button>
+              <button id="unload-model" type="button" class="ghost-button">Unload</button>
+              <details id="more-menu" class="menu">
+                <summary class="ghost-button" aria-label="More actions">•••</summary>
+                <div class="menu-list">
+                  <button id="clone-model" type="button">Duplicate model</button>
+                  <button id="rename-model" type="button">Rename model</button>
+                  <button id="delete-model" type="button" class="danger">Remove model</button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div id="summary-chips" class="summary-chips" aria-label="Key settings"></div>
+
+          <div class="editor-toolbar">
+            <div class="segmented section-tabs" id="section-tabs" role="tablist" aria-label="Setting sections"></div>
+            <div class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="option-search" type="search" placeholder="Find a setting…" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+
+          <p id="tab-blurb" class="tab-blurb"></p>
+          <div id="option-editor" class="option-editor"></div>
+          <div id="text-editor" class="text-editor" hidden>
+            <div class="text-head">
+              <p class="muted">Editing this section as <code>key = value</code> lines.</p>
+              <button id="close-text" type="button" class="secondary">Back to controls</button>
+            </div>
+            <textarea id="raw-options" rows="16" spellcheck="false" aria-label="Options as INI text"></textarea>
+          </div>
+        </div>
+      </fieldset>
+    </section>
+
+    <!-- ============ ROUTER SETUP ============ -->
+    <section id="view-router" class="view" aria-label="Router setup" hidden>
+      <article class="panel settings-card">
+        <p class="label">STEP 1</p>
+        <h2>llama.cpp installation</h2>
+        <p class="muted">By default the manager runs <code>llama serve</code> from your PATH, just like typing it in a terminal (older installs with <code>llama-server</code> work too). You only need a custom path if llama.cpp isn't installed that way.</p>
+        <div id="detect-status" class="detect-status" data-state="checking" role="status">
+          <span class="detect-icon" aria-hidden="true"></span>
+          <div class="detect-text">
+            <strong id="detect-title">Looking for llama.cpp…</strong>
+            <span id="detect-detail"></span>
+          </div>
+          <button id="detect-refresh" type="button" class="ghost-button">Check again</button>
+        </div>
+        <form id="settings">
+          <div class="field">
+            <span class="field-label">Which llama.cpp to run</span>
+            <div class="segmented" role="radiogroup" aria-label="llama.cpp location">
+              <button type="button" role="radio" data-exe-mode="auto" class="active" aria-checked="true">Use PATH (automatic)</button>
+              <button type="button" role="radio" data-exe-mode="custom" aria-checked="false">Custom path</button>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <label id="executable-field" hidden>Path to llama (or llama-server)
+              <input id="executable" autocomplete="off" spellcheck="false" placeholder="C:\llama.cpp\llama.exe">
+            </label>
+            <label>Router port
+              <input id="port" type="number" min="1" max="65535" required value="8080">
+            </label>
+          </div>
+          <button id="save" type="submit" class="secondary">Save installation</button>
+        </form>
+      </article>
+
+      <article class="panel models-card" id="router-capacity">
+        <p class="label">STEP 2</p>
+        <h2>Model switching</h2>
+        <p class="muted">How many models may stay in memory at once. With 1, asking for a different model unloads the previous one automatically. Stop the router to change these.</p>
+        <div class="capacity-row">
+          <div class="capacity-choice">
+            <strong>Models kept in memory</strong>
+            <span class="stepper">
+              <button type="button" class="step" data-step="-1" aria-label="Fewer models">−</button>
+              <input id="max-loaded" type="number" min="1" max="32" value="1" aria-label="Maximum resident models">
+              <button type="button" class="step" data-step="1" aria-label="More models">+</button>
+            </span>
+          </div>
+          <label class="switch-label">
+            <span><strong>Load models on request</strong><small>Otherwise models must be loaded manually.</small></span>
+            <input id="autoload" type="checkbox" class="switch" role="switch" checked>
+          </label>
+        </div>
+      </article>
+
+      <article class="panel models-card">
+        <p class="label">OPTIONAL</p>
+        <h2>Import an existing models.ini</h2>
+        <p class="muted">Replaces the managed model list with the sections from your INI file. Your original INI and model files are never modified.</p>
+        <form id="import-form" class="import-form">
+          <label class="sr-only" for="preset-source">Source INI</label>
+          <input id="preset-source" required spellcheck="false" placeholder="Full path to models.ini">
+          <button type="submit" class="secondary">Import INI</button>
+        </form>
+        <details class="ini-preview">
+          <summary>Preview the generated router INI</summary>
+          <pre id="ini-preview" tabindex="0"></pre>
+        </details>
+      </article>
+    </section>
+
+    <section id="view-observability" class="view" aria-label="Observability" hidden>
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="label">DIRECT INFERENCE</p><h1>Observability</h1></div>
+          <button id="refresh-observability" class="secondary" type="button">Refresh</button>
+        </div>
+        <p class="muted">Read from llama.cpp worker logs. No proxy, no client changes. Metadata persists across manager restarts.</p>
+        <div class="telemetry-filters">
+          <label>Model<select id="telemetry-model"><option value="all">All models</option></select></label>
+          <label>Time range<select id="telemetry-range">
+            <option value="1h">Last hour</option><option value="24h" selected>Last 24 hours</option>
+            <option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All time</option>
+          </select></label>
+          <span id="telemetry-updated" class="muted" role="status">Waiting for data...</span>
+        </div>
+        <p id="telemetry-error" class="alert" role="alert" hidden></p>
+        <p id="telemetry-warning" class="alert" role="status" hidden></p>
+      </article>
+      <div id="telemetry-metrics" class="telemetry-metrics" aria-live="polite"></div>
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="label">ACTIVITY OVER TIME</p><h2>Request &amp; token trends</h2></div>
+          <label class="chart-selector">Plot<select id="telemetry-plot">
+            <option value="requests">Observed requests</option><option value="input_tokens">Input tokens</option>
+            <option value="output_tokens">Output tokens</option><option value="cached_tokens">Cached tokens</option>
+            <option value="draft_tokens">Draft tokens</option><option value="cache_hit_rate">Cache hit rate</option>
+            <option value="draft_acceptance">Draft acceptance</option><option value="prefill_tps">Prefill speed</option>
+            <option value="generation_tps">Generation speed</option><option value="prefill_ms">Prefill latency</option>
+          </select></label>
+        </div>
+        <div id="telemetry-chart" class="telemetry-chart" aria-label="Activity chart"></div>
+        <div id="telemetry-chart-labels" class="chart-labels"></div>
+        <p class="muted">Hover or focus a bar for its value. Click a model below to filter all metrics.</p>
+      </article>
+      <article class="panel">
+        <p class="label">MODEL COMPARISON</p><h2>Usage &amp; performance</h2>
+        <div id="telemetry-models" class="telemetry-table"></div>
+      </article>
+      <article class="panel">
+        <p class="label">LATEST 100 OBSERVED TASKS</p><h2>Request history</h2>
+        <div id="telemetry-history" class="telemetry-table"></div>
+      </article>
+      <article class="panel telemetry-coverage">
+        <h2>What these numbers mean</h2>
+        <ul id="telemetry-limitations"></ul>
+        <p class="muted">Input/cache fields depend on your build's prompt-length log lines. More verbose logging may expose prompt content in raw diagnostics; the manager does not enable it automatically. Prefill latency is not time to first token.</p>
+      </article>
+    </section>
+
+    <footer>
+      <div class="footer-line">
+        <span class="footer-dot"></span>
+        Runs locally on Windows and Linux
+        <span>•</span>
+        Your data never leaves this machine
+      </div>
+      <p class="credit">Made with <span class="heart" aria-label="love">♥</span> by <strong>Munagala Giridhar</strong>, Senior Applied Scientist + <strong>GitHub Copilot</strong></p>
+    </footer>
+  </main>
+
+  <div class="save-bar" data-state="clean" role="region" aria-label="Unsaved changes">
+    <p id="save-message" class="save-message">All changes saved.</p>
+    <span id="catalog-status" class="sr-only" role="status" data-state="loading">Loading presets...</span>
+    <div class="save-actions">
+      <button id="discard-catalog" type="button" class="ghost-button">Discard</button>
+      <button id="apply-catalog" type="button" class="secondary" title="Reload presets in the running router">Apply to running router</button>
+      <button id="save-catalog" type="button" class="primary" title="Ctrl+S">Save changes</button>
+    </div>
+  </div>
+
+  <dialog id="logs-dialog" class="dialog logs-dialog" aria-labelledby="logs-title">
+    <div class="logs-card">
+      <div class="panel-head">
+        <div><p class="label">DIAGNOSTICS</p><h2 id="logs-title">Latest server output</h2></div>
+        <button id="close-logs" class="secondary" type="button">Close</button>
+      </div>
+      <p class="muted">Latest 500 lines. Raw logs may contain sensitive content; they are not the observability database.</p>
+      <label class="switch-label"><span>Follow</span><input id="follow-logs" type="checkbox" class="switch" role="switch" checked></label>
+      <p id="logs-error" class="alert" role="alert" hidden></p>
+      <pre id="logs" tabindex="0" aria-label="Server output">No server output yet.</pre>
+    </div>
+  </dialog>
+
+  <dialog id="new-model-dialog" class="dialog" aria-labelledby="new-model-title">
+    <form id="add-model-form" method="dialog">
+      <h2 id="new-model-title">Add a model</h2>
+      <p class="muted">Clients will request it by this ID. You can fine-tune everything after creating it.</p>
+      <label>Model ID
+        <input id="new-model" required placeholder="e.g. qwen-27b" spellcheck="false" autocomplete="off">
+      </label>
+      <label>Model purpose
+        <select id="new-purpose">
+          <option value="text">Text generation / chat</option>
+          <option value="decision">Decision model (System One)</option>
+        </select>
+      </label>
+      <p id="new-decision-hint" class="row-desc" hidden>Uses /v1/systemone, not chat completions. A blank decision preset starts with 4K context/batches, one slot, f16 KV and an automatic vision projector. The GGUF must be a native decision model.</p>
+      <div class="field">
+        <span class="field-label">Where are the weights?</span>
+        <div class="segmented" role="radiogroup" aria-label="Model source">
+          <button type="button" role="radio" data-source="local" class="active" aria-checked="true">Local GGUF file</button>
+          <button type="button" role="radio" data-source="hf" aria-checked="false">Hugging Face</button>
+        </div>
+      </div>
+      <label><span id="new-source-label">Path to .gguf file</span>
+        <input id="new-source" required spellcheck="false" autocomplete="off" placeholder="C:\models\my-model-Q4_K_M.gguf">
+      </label>
+      <label>Start from
+        <select id="new-template"></select>
+      </label>
+      <p id="new-model-error" class="opt-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-new-model" class="ghost-button">Cancel</button>
+        <button type="submit" id="add-model" class="primary">Create model</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
