@@ -125,14 +125,14 @@ python app.py --open-browser
 ```
 
 Use `python3` on Linux. The dashboard defaults to
-**http://127.0.0.1:8787/**. For another dashboard port:
+**http://127.0.0.1:1101/**. For another dashboard port:
 
 ```powershell
-.\launch-windows.cmd --port 8797
+.\launch-windows.cmd --port 1102
 ```
 
 ```bash
-./launch-linux.sh --port 8797
+./launch-linux.sh --port 1102
 ```
 
 `--data-dir PATH` selects another local settings/log directory.

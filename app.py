@@ -203,7 +203,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage an installed llama.cpp server on localhost.")
-    parser.add_argument("--port", type=int, default=8787, help="Dashboard port (default: 8787)")
+    parser.add_argument("--port", type=int, default=1101, help="Dashboard port (default: 1101)")
     parser.add_argument("--data-dir", type=Path, default=ROOT / ".local",
                         help="Local settings/log directory (default: project .local)")
     parser.add_argument("--open-browser", action="store_true",

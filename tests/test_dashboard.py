@@ -406,7 +406,7 @@ class CommandLineTests(unittest.TestCase):
     def test_help_and_invalid_port(self):
         result = self.run_app("--help")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("8787", result.stdout)
+        self.assertIn("default: 1101", result.stdout)
         self.assertIn("--open-browser", result.stdout)
         self.assertNotIn("--api-port", result.stdout)
         result = self.run_app("--port", "0")
@@ -415,14 +415,14 @@ class CommandLineTests(unittest.TestCase):
 
     @patch("app.webbrowser.open", return_value=True)
     def test_open_dashboard_uses_default_browser(self, browser_open):
-        url = "http://127.0.0.1:8787"
+        url = "http://127.0.0.1:1101"
         self.assertTrue(open_dashboard(url))
         browser_open.assert_called_once_with(url)
 
     @patch("app.webbrowser.open", return_value=False)
     def test_open_dashboard_reports_failure(self, browser_open):
         with patch("sys.stderr") as stderr:
-            self.assertFalse(open_dashboard("http://127.0.0.1:8787"))
+            self.assertFalse(open_dashboard("http://127.0.0.1:1101"))
         self.assertTrue(stderr.write.called)
 
     def test_cli_occupied_port_and_invalid_config(self):
