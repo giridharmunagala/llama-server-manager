@@ -3,6 +3,7 @@
 let telemetryData = null;
 let telemetryPolling = null;
 let logsPolling = null;
+let logsVersion = 0;
 let telemetryVersion = 0;
 let telemetryRendered = "";
 
@@ -165,19 +166,28 @@ async function refreshObservability() {
   try { await telemetryPolling; } finally { telemetryPolling = null; }
 }
 
+function logsVisible() {
+  return !$("view-diagnostics").hidden && !document.hidden;
+}
+
 async function refreshLogs() {
+  if (!logsVisible()) return;
   if (logsPolling) return logsPolling;
+  const version = logsVersion;
   logsPolling = (async () => {
     try {
       const logs = await request("/api/logs");
-      const output = logs.lines.join("\n") || "No server output yet.";
+      if (!logsVisible() || version !== logsVersion) return;
+      const output = logs.lines.slice(-500).join("\n") || "No server output yet.";
       if ($("logs").textContent !== output) {
         $("logs").textContent = output;
         if ($("follow-logs").checked) $("logs").scrollTop = $("logs").scrollHeight;
       }
       showError("logs-error", "");
     } catch (error) {
-      showError("logs-error", `Cannot load server output: ${error.message}`);
+      if (logsVisible() && version === logsVersion) {
+        showError("logs-error", `Cannot load server output: ${error.message}`);
+      }
     }
   })();
   try { await logsPolling; } finally { logsPolling = null; }
@@ -189,9 +199,12 @@ function initializeObservability() {
   }
   $("telemetry-plot").addEventListener("change", renderTelemetryChart);
   $("refresh-observability").addEventListener("click", () => { void refreshObservability(); });
-  $("open-logs").addEventListener("click", () => {
-    $("logs-dialog").showModal();
-    void refreshLogs();
+  $("refresh-logs").addEventListener("click", () => { void refreshLogs(); });
+  $("follow-logs").addEventListener("change", () => {
+    logsVersion += 1;
+    if ($("follow-logs").checked) void refreshLogs();
   });
-  $("close-logs").addEventListener("click", () => $("logs-dialog").close());
+  document.addEventListener("visibilitychange", () => {
+    logsVersion += 1;
+  });
 }

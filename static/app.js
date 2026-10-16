@@ -4,7 +4,7 @@ const $ = (id) => document.getElementById(id);
 const DEFAULTS = "*";
 const TRUTHY = new Set(["1", "true", "on", "enabled", "yes"]);
 const FALSY = new Set(["0", "false", "off", "disabled", "no"]);
-const VIEWS = ["overview", "models", "router", "observability"];
+const VIEWS = ["overview", "models", "router", "observability", "diagnostics"];
 const CTX_STEPS = [0, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
 
 let token = "";
@@ -512,7 +512,22 @@ function renderSourceCard() {
     const context = fieldContext(option);
     const input = textInput(option, context, { class: "mono" });
     input.addEventListener("input", () => updateSourceWarning());
-    return h("label", { class: "source-field" }, h("span", {}, label, hint ? h("small", {}, ` ${hint}`) : null), input);
+    let control = input;
+    if (key === "model") {
+      const targetScope = scope;
+      const button = h("button", { type: "button", class: "secondary" }, "Browse...");
+      button.addEventListener("click", () => {
+        void browseModelFile(button, (path) => {
+          if (!input.isConnected || scope !== targetScope || sourceMode() !== "local") return;
+          input.value = path;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          updateSourceWarning();
+        }, (message) => toast(message, "error"));
+      });
+      control = h("div", { class: "file-path-control" }, input, button);
+    }
+    return h("label", { class: "source-field" }, h("span", {}, label, hint ? h("small", {}, ` ${hint}`) : null), control);
   };
   const missing = h("p", { class: "row-warning source-warning" });
   const card = h("div", { class: "source-card", dataset: { key: "source" } },
@@ -1102,6 +1117,10 @@ function go(view) {
 function renderView() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
   for (const name of VIEWS) $(`view-${name}`).hidden = name !== view;
+  if (view !== "diagnostics") {
+    $("follow-logs").checked = false;
+    logsVersion += 1;
+  }
   for (const link of document.querySelectorAll(".tabs a")) {
     link.classList.toggle("active", link.dataset.view === view);
     if (link.dataset.view === view) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
@@ -1181,7 +1200,7 @@ async function refresh() {
       }
       updateModelStates();
       await Promise.all([
-        $("logs-dialog").open ? refreshLogs() : Promise.resolve(),
+        logsVisible() && $("follow-logs").checked ? refreshLogs() : Promise.resolve(),
         !$("view-observability").hidden ? refreshObservability() : Promise.resolve(),
       ]);
     } catch (error) {
@@ -1328,6 +1347,21 @@ function routerAction(action, model) {
 
 // ---------- new model dialog ----------
 
+async function browseModelFile(button, onSelected, onError) {
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = "Picking...";
+  try {
+    const result = await request("/api/pick-model", {});
+    if (result.path !== null) onSelected(result.path);
+  } catch (error) {
+    onError(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
 function setNewSource(mode) {
   newSource = mode;
   for (const button of document.querySelectorAll("#add-model-form [data-source]")) {
@@ -1337,6 +1371,8 @@ function setNewSource(mode) {
   }
   $("new-source-label").textContent = mode === "hf" ? "Hugging Face repo (user/model:quant)" : "Path to .gguf file";
   $("new-source").placeholder = mode === "hf" ? "unsloth/Qwen3-8B-GGUF:Q4_K_M" : "C:\\models\\my-model-Q4_K_M.gguf";
+  $("browse-new-model").hidden = mode !== "local";
+  $("new-source-hint").hidden = mode !== "local";
 }
 
 function openNewModel() {
@@ -1431,6 +1467,14 @@ $("theme-toggle").addEventListener("click", () => {
 });
 renderThemeToggle();
 $("cancel-new-model").addEventListener("click", () => $("new-model-dialog").close());
+$("browse-new-model").addEventListener("click", () => {
+  showError("new-model-error", "");
+  void browseModelFile($("browse-new-model"), (path) => {
+    if (!$("new-model-dialog").open || newSource !== "local") return;
+    $("new-source").value = path;
+    $("new-source").focus();
+  }, (message) => showError("new-model-error", message));
+});
 $("new-purpose").addEventListener("change", () => {
   $("new-decision-hint").hidden = $("new-purpose").value !== "decision";
 });

@@ -9,10 +9,12 @@ import signal
 import socket
 import sqlite3
 import sys
+import threading
 import webbrowser
 from urllib.parse import parse_qs, urlsplit
 
 from manager import ManagerError, ServerManager
+from file_picker import select_model_file
 
 
 ROOT = Path(__file__).resolve().parent
@@ -49,6 +51,7 @@ class DashboardServer(ThreadingHTTPServer):
     def __init__(self, port, manager):
         self.manager = manager
         self.csrf_token = secrets.token_urlsafe(32)
+        self.file_picker_lock = threading.Lock()
         super().__init__(("127.0.0.1", port), DashboardHandler)
         self.hosts = {f"127.0.0.1:{self.server_port}", f"localhost:{self.server_port}"}
         self.origins = {f"http://{host}" for host in self.hosts}
@@ -164,10 +167,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._trusted_request(mutation=True)
             path = self.path.split("?", 1)[0]
             if path not in {"/api/config", "/api/start", "/api/stop", "/api/workspace",
-                            "/api/catalog", "/api/import", "/api/router", "/api/costs"}:
+                            "/api/catalog", "/api/import", "/api/router", "/api/costs",
+                            "/api/pick-model"}:
                 raise ManagerError("Route not found.", 404)
             value = self._json_body()
-            if path == "/api/config":
+            if path == "/api/pick-model":
+                if value != {}:
+                    raise ManagerError("File picker requests must contain an empty JSON object.")
+                if not self.server.file_picker_lock.acquire(blocking=False):
+                    raise ManagerError("A file picker is already open. Select a file or cancel it.", 409)
+                try:
+                    self._reply(200, {"path": select_model_file()})
+                finally:
+                    self.server.file_picker_lock.release()
+            elif path == "/api/config":
                 self._reply(200, {"config": self.server.manager.save_config(value)})
             elif path == "/api/workspace":
                 self._reply(200, self.server.manager.save_workspace(value))

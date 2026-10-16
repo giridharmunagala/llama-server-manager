@@ -142,16 +142,29 @@ There is no `--api-port` option.
 
 ## Configure models
 
-The dashboard has four views in the top bar: **Overview** (status, endpoint
+The dashboard has five views in the top bar: **Overview** (status, endpoint
 and a tile per model with quick Load/Unload), **Models**, **Router setup**
-and **Observability**. **Start**/**Stop** are always in the top bar.
-**Diagnostics** opens the raw server output in a dialog, not a separate page.
+**Observability**, and **Diagnostics**. **Start**/**Stop** are always in the top bar.
+**Diagnostics** is a full page for raw server output. Log display is off by
+default: click **Refresh logs** for a snapshot or enable **Live updates** to follow
+output. Leaving Diagnostics switches live updates off.
 
 1. In **Models**, click **+ New model**: give it an ID, choose *Local GGUF
-   file* or *Hugging Face*, enter the path or repo, and optionally copy the
-   settings of an existing model. To bring in an existing INI instead, use
+   file* or *Hugging Face*, browse for the file (or paste its path) or enter
+   the repo, and optionally copy the settings of an existing model.
+   To bring in an existing INI instead, use
    **Router setup → Import an existing models.ini** (replaces the managed
    list after confirmation; your original file is never changed).
+   A local source is a **single `.gguf` file, not a folder**. For split
+   models, select the first part (`…-00001-of-0000N.gguf`). **Browse...**
+   opens a desktop file picker on the machine running the dashboard, on
+   Windows and Linux, and fills in the full path without uploading or
+   copying weights. It is also available in an existing model's weights card.
+   Browsing requires a desktop session. Linux uses Zenity or KDE's KDialog
+   when installed, otherwise Python's Tcl/Tk support (on Debian/Ubuntu install
+   `python3-tk`; on Fedora install `python3-tkinter`). On Windows enable
+   Tcl/Tk in the Python installer. Pasting a path still
+   works without Tk or in a headless session.
 2. Select a model in the sidebar. A summary strip shows its key settings
    (context, GPU offload, KV cache, slots, speed-up…); click one to jump to
    it. The **Essentials** tab holds the model weights plus the settings most
@@ -399,8 +412,11 @@ and [System One API reference](https://github.com/ggml-org/llama.cpp/blob/master
 - Settings persist in `.local/config.json`, `.local/workspace.json`, and
   `.local/catalog.json`; generated presets are `.local/router-active.ini`.
   Logs are `.local/llama-server.log`, rotating at 2 MiB with two backups.
-  Diagnostics shows the latest 500 lines and fetches them only while its
-  dialog is open. The visible observability dashboard refreshes every two
+  Diagnostics replaces its output with at most the latest 500 lines, never
+  accumulating history in the UI. Logs are fetched only on manual refresh or
+  every two seconds with live updates enabled on the visible Diagnostics page;
+  background browser tabs do not fetch or render logs. Disk logging continues
+  independently. The visible observability dashboard refreshes every two
   seconds; collection is independent of UI polling.
 - Only one dashboard may use a data directory at a time. If another launcher
   is running, stop it before launching again.
@@ -428,7 +444,7 @@ Optional JavaScript control tests use Node's built-in runner (Node is not
 needed to run the manager):
 
 ```powershell
-node --test tests\test_decision.js
+node --test tests/test_decision.js tests/test_file_picker.js tests/test_diagnostics.js
 ```
 
 ## Disclaimer

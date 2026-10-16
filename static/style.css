@@ -297,6 +297,9 @@ input[type="range"].ghost::-moz-range-thumb { background: var(--text-4); }
 .source-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
 .source-field { display: grid; gap: 6px; }
 .source-field small { color: var(--text-4); }
+.file-path-control { display: flex; align-items: center; gap: 8px; }
+.file-path-control input { flex: 1; min-width: 0; width: 0; }
+.file-path-control button { flex-shrink: 0; }
 .model-purpose { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; align-items: center; gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--accent-border); }
 .model-purpose select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--input); width: 100%; }
 .decision-guide { padding: 20px; margin: 12px 0; border: 1px solid var(--info-border); border-radius: 12px; background: var(--info-bg); }
@@ -406,10 +409,8 @@ input[type="range"].ghost::-moz-range-thumb { background: var(--text-4); }
 .ini-preview pre { max-height: 380px; margin: 0; padding: 14px 16px; overflow: auto; border-top: 1px solid var(--border); color: var(--text-2); font: .84rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
 
 /* ---------- logs ---------- */
-.logs-dialog { width: min(1100px, calc(100% - 32px)); }
-.logs-dialog .logs-card { padding: 24px; }
-.logs-dialog .switch-label { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.logs-card pre { height: calc(100vh - 260px); min-height: 300px; margin: 0; padding: 16px 18px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text-2); font: .84rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.logs-card .switch-label { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.logs-card pre { height: calc(100vh - 340px); min-height: 400px; margin: 0; padding: 16px 18px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text-2); font: .9rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---------- observability ---------- */
 .telemetry-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin-top: 20px; }

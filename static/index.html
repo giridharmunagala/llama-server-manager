@@ -23,9 +23,9 @@
         <a href="#models" data-view="models">Models <span id="nav-model-count" class="tab-count"></span></a>
         <a href="#router" data-view="router">Router setup</a>
         <a href="#observability" data-view="observability">Observability</a>
+        <a href="#diagnostics" data-view="diagnostics">Diagnostics</a>
       </nav>
       <div class="topbar-actions">
-        <button id="open-logs" class="ghost-button small" type="button" title="Open raw server output for troubleshooting">Diagnostics</button>
         <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch theme">☾</button>
         <div class="status-pill" data-state="connecting">
           <span class="status-dot" aria-hidden="true"></span>
@@ -269,6 +269,19 @@
       </article>
     </section>
 
+    <section id="view-diagnostics" class="view" aria-labelledby="logs-title" hidden>
+      <article class="panel logs-card">
+        <div class="panel-head">
+          <div><p class="label">DIAGNOSTICS</p><h1 id="logs-title">Server output</h1></div>
+          <button id="refresh-logs" class="secondary" type="button">Refresh logs</button>
+        </div>
+        <p class="muted">Log display is off by default. Refresh for a snapshot, or enable live updates while this page is visible. Only the latest 500 lines are shown; older output is never accumulated in the UI. Raw logs may contain sensitive content.</p>
+        <label class="switch-label"><span>Live updates (follow latest output)</span><input id="follow-logs" type="checkbox" class="switch" role="switch"></label>
+        <p id="logs-error" class="alert" role="alert" hidden></p>
+        <pre id="logs" tabindex="0" aria-label="Server output">Log display is off. Click Refresh logs or enable live updates to read server output.</pre>
+      </article>
+    </section>
+
     <footer>
       <div class="footer-line">
         <span class="footer-dot"></span>
@@ -289,19 +302,6 @@
       <button id="save-catalog" type="button" class="primary" title="Ctrl+S">Save changes</button>
     </div>
   </div>
-
-  <dialog id="logs-dialog" class="dialog logs-dialog" aria-labelledby="logs-title">
-    <div class="logs-card">
-      <div class="panel-head">
-        <div><p class="label">DIAGNOSTICS</p><h2 id="logs-title">Latest server output</h2></div>
-        <button id="close-logs" class="secondary" type="button">Close</button>
-      </div>
-      <p class="muted">Latest 500 lines. Raw logs may contain sensitive content; they are not the observability database.</p>
-      <label class="switch-label"><span>Follow</span><input id="follow-logs" type="checkbox" class="switch" role="switch" checked></label>
-      <p id="logs-error" class="alert" role="alert" hidden></p>
-      <pre id="logs" tabindex="0" aria-label="Server output">No server output yet.</pre>
-    </div>
-  </dialog>
 
   <dialog id="new-model-dialog" class="dialog" aria-labelledby="new-model-title">
     <form id="add-model-form" method="dialog">
@@ -324,9 +324,14 @@
           <button type="button" role="radio" data-source="hf" aria-checked="false">Hugging Face</button>
         </div>
       </div>
-      <label><span id="new-source-label">Path to .gguf file</span>
-        <input id="new-source" required spellcheck="false" autocomplete="off" placeholder="C:\models\my-model-Q4_K_M.gguf">
-      </label>
+      <div class="field">
+        <label id="new-source-label" for="new-source">Path to .gguf file</label>
+        <div class="file-path-control">
+          <input id="new-source" required spellcheck="false" autocomplete="off" placeholder="C:\models\my-model-Q4_K_M.gguf">
+          <button id="browse-new-model" type="button" class="secondary">Browse...</button>
+        </div>
+        <small id="new-source-hint" class="row-desc">Select a single .gguf file, not a folder. For split models, choose the first part.</small>
+      </div>
       <label>Start from
         <select id="new-template"></select>
       </label>

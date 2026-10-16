@@ -339,6 +339,36 @@ class RouteTests(ManagerFixture, unittest.TestCase):
         self.assertEqual(json.loads(body)["state"], "stopped")
         self.assertIsNone(json.loads(body)["pid"])
 
+    def test_file_picker_route_selection_cancel_errors_and_lock(self):
+        with patch("app.select_model_file", return_value=str(self.model)) as picker:
+            code, _, body = self.request("/api/pick-model", {})
+            self.assertEqual(code, 200)
+            self.assertEqual(json.loads(body), {"path": str(self.model)})
+            picker.assert_called_once_with()
+            picker.return_value = None
+            self.assertEqual(json.loads(self.request("/api/pick-model", {})[2]), {"path": None})
+            picker.side_effect = ManagerError("No desktop display.", 500)
+            self.assertEqual(self.request("/api/pick-model", {})[0], 500)
+            self.assertFalse(self.server.file_picker_lock.locked())
+            picker.reset_mock()
+            self.server.file_picker_lock.acquire()
+            try:
+                self.assertEqual(self.request("/api/pick-model", {})[0], 409)
+                picker.assert_not_called()
+                self.assertEqual(self.request("/api/status")[0], 200)
+            finally:
+                self.server.file_picker_lock.release()
+
+    def test_file_picker_route_requires_trusted_empty_post(self):
+        with patch("app.select_model_file") as picker:
+            self.assertEqual(self.request("/api/pick-model")[0], 404)
+            self.assertEqual(self.request("/api/pick-model", {"path": "anything"})[0], 400)
+            self.assertEqual(self.request("/api/pick-model", {},
+                                          {"X-CSRF-Token": ""})[0], 403)
+            self.assertEqual(self.request("/api/pick-model", {},
+                                          {"Origin": "https://evil.example"})[0], 403)
+            picker.assert_not_called()
+
     def test_cross_origin_host_and_token_rejected(self):
         for path, body, headers in [
             ("/api/config", None, {"Host": "evil.example"}),

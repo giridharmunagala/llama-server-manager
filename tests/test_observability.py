@@ -255,12 +255,15 @@ class ObservabilityRoutes(test_dashboard.RouteTests):
             self.assertEqual(code, 500)
             self.assertIn("disk full", json.loads(body)["error"])
 
-    def test_dashboard_has_observability_and_diagnostics_not_logs_page(self):
+    def test_dashboard_has_diagnostics_page_with_live_logs_off_by_default(self):
         body = self.request("/")[2]
         self.assertIn(b'id="view-observability"', body)
-        self.assertIn(b'id="logs-dialog"', body)
-        self.assertNotIn(b'id="view-logs"', body)
-        self.assertNotIn(b'href="#logs"', body)
+        self.assertIn(b'id="view-diagnostics"', body)
+        self.assertIn(b'href="#diagnostics"', body)
+        self.assertIn(b'id="refresh-logs"', body)
+        self.assertNotIn(b'id="logs-dialog"', body)
+        follow = body.split(b'id="follow-logs"', 1)[1].split(b">", 1)[0]
+        self.assertNotIn(b"checked", follow)
         self.assertEqual(self.request("/static/observability.js")[0], 200)
 
 
