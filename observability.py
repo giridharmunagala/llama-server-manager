@@ -62,6 +62,7 @@ class Observability:
                 UNIQUE(run, worker, slot, task));
             CREATE INDEX IF NOT EXISTS observation_time ON observations(started_at);
             CREATE INDEX IF NOT EXISTS observation_model_time ON observations(model, started_at);
+            CREATE INDEX IF NOT EXISTS observation_completion ON observations(ended_at, model);
         """)
         with self.db:
             self.db.execute("UPDATE observations SET status='interrupted', ended_at=? "
@@ -155,10 +156,49 @@ class Observability:
                 "SELECT * FROM observations" + where + " ORDER BY started_at DESC,id DESC LIMIT 100", params)]
             choices = [row[0] for row in self.db.execute(
                 "SELECT DISTINCT model FROM observations ORDER BY model")]
+            completion_filter = " AND model IS NULL" if model == "" else " AND model=?" if model else ""
+            completion_params = [model] if model else []
+
+            def throughput(start, end, name=None, filter_model=False):
+                clause = " AND model IS ?" if filter_model else completion_filter
+                arguments = [name] if filter_model else completion_params
+                row = self.db.execute(
+                    "SELECT count(*) AS completed, sum(output_tokens) AS tokens, "
+                    "sum(input_tokens) AS input_tokens, sum(prefill_tokens) AS prefill_tokens "
+                    "FROM observations WHERE status IN ('measured','unmeasured') "
+                    "AND ended_at>=? AND ended_at<?" + clause, [start, end, *arguments]).fetchone()
+                seconds = end - start
+                return {"completed": row["completed"],
+                        "calls_per_second": row["completed"] / seconds if seconds > 0 else None,
+                        "calls_per_minute": row["completed"] * 60 / seconds if seconds > 0 else None,
+                        "aggregate_tps": row["tokens"] / seconds
+                        if seconds > 0 and row["tokens"] is not None else None,
+                        "aggregate_input_tps": row["input_tokens"] / seconds
+                        if seconds > 0 and row["input_tokens"] is not None else None,
+                        "aggregate_prefill_tps": row["prefill_tokens"] / seconds
+                        if seconds > 0 and row["prefill_tokens"] is not None else None}
+
+            totals.update(throughput(now - 60, now))
+            for row in models:
+                row.update(throughput(now - 60, now, row["model"], True))
+            completion_buckets = self.db.execute(
+                "SELECT DISTINCT CAST(ended_at / ? AS INTEGER)*? FROM observations "
+                "WHERE status IN ('measured','unmeasured') AND ended_at>=? AND ended_at<?"
+                + completion_filter, [bucket, bucket, since, now, *completion_params]).fetchall()
+            by_time = {row["timestamp"]: row for row in series}
+            for stamp, in completion_buckets:
+                if stamp not in by_time:
+                    by_time[stamp] = rates(dict(self.db.execute(
+                        f"SELECT {AGGREGATE} FROM observations WHERE 0").fetchone()))
+                    by_time[stamp]["timestamp"] = stamp
+            for stamp, row in by_time.items():
+                row.update(throughput(max(since, stamp), min(now, stamp + bucket)))
+            series = sorted(by_time.values(), key=lambda row: row["timestamp"])
             return {"totals": totals, "models": models, "series": series, "history": history,
                     "model_choices": choices, "bucket_seconds": bucket, "range": period,
                     "source": "llama.cpp worker logs", "warning": self.warning, "rejected_metrics": self.rejected,
                     "limitations": [
+                        "Live throughput sums completed slot tasks across all workers and parallel slots over the last 60 seconds. Charts use wall-clock buckets and completion timestamps; output tokens are credited on completion, not streamed token by token.",
                         "Counts represent observed slot tasks, not every HTTP request. Multi-completion requests may create multiple tasks; failures before slot assignment are not visible.",
                         "Input/cache counts require prompt-length log lines. Missing metrics are unknown, not zero. Cache hit rate is cached input tokens / known input tokens.",
                         "Client time to first token is unavailable without client/proxy instrumentation. Prefill time excludes queuing, model loading and network delay.",

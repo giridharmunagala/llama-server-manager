@@ -24,11 +24,27 @@ function telemetryDate(seconds) {
   return new Date(seconds * 1000).toLocaleString();
 }
 
+function telemetryDecision(model) {
+  return liveModels.some((item) => item.id === model &&
+    item.architecture?.output_modalities?.includes("decisions")) || isDecisionModel(model);
+}
+
+function telemetryDecisionOnly() {
+  const selected = $("telemetry-model").value;
+  return selected.startsWith("model:") ? telemetryDecision(selected.slice(6)) :
+    telemetryData.models.length > 0 && telemetryData.models.every((row) => telemetryDecision(row.model));
+}
+
 function renderTelemetry() {
   const data = telemetryData;
   const totals = data.totals;
   const sample = (count) => `${count} / ${totals.requests} tasks measured`;
   const cards = [
+    ["Completed calls / sec", metricNumber(totals.calls_per_second, " calls/s", 2), "Last 60s; all workers and parallel slots"],
+    ["Completed calls / min", metricNumber(totals.calls_per_minute, " RPM", 1), "Last 60s; observed completed slot tasks, not HTTP success"],
+    ["Aggregate output throughput", metricNumber(totals.aggregate_tps, " tok/s", 1), "Last 60s; total completed output / wall-clock time"],
+    ["Aggregate input throughput", metricNumber(totals.aggregate_input_tps, " tok/s", 1), "Last 60s; known input including cache / wall-clock time"],
+    ["Aggregate evaluated input throughput", metricNumber(totals.aggregate_prefill_tps, " tok/s", 1), "Last 60s; evaluated input excluding cache / wall-clock time"],
     ["Observed requests", metricNumber(totals.requests), "Slot tasks, not an HTTP access log"],
     ["Input tokens", metricNumber(totals.input_tokens), sample(totals.input_samples)],
     ["Input evaluated", metricNumber(totals.prefill_tokens), sample(totals.prefill_samples)],
@@ -38,12 +54,25 @@ function renderTelemetry() {
     ["Draft tokens generated", metricNumber(totals.draft_tokens), sample(totals.draft_samples)],
     ["Draft acceptance", metricPercent(totals.draft_acceptance), totals.accepted_tokens == null ? "-" : `${metricNumber(totals.accepted_tokens)} accepted tokens`],
     ["Prefill speed", metricNumber(totals.prefill_tps, " tok/s", 1), "Evaluated tokens / prefill time"],
-    ["Generation speed", metricNumber(totals.generation_tps, " tok/s", 1), "Output tokens / generation time"],
+    ["Per-task generation speed", metricNumber(totals.generation_tps, " tok/s", 1), "Time-weighted task speed; not aggregate throughput"],
     ["Prefill latency", metricNumber(totals.prefill_ms, " ms", 1), "Mean server prefill time; not TTFT"],
     ["Time to first token", metricNumber(totals.ttft_ms, " ms", 1), "Requires client-side instrumentation"],
     ["Compute latency", metricNumber(totals.total_ms, " ms", 1), "Mean prefill + generation time"],
   ];
-  $("telemetry-metrics").replaceChildren(...cards.map(([label, value, detail]) =>
+  const decision = telemetryDecisionOnly();
+  const visibleCards = decision ? cards.filter(([label]) =>
+    ["Completed calls / sec", "Completed calls / min", "Observed requests", "Compute latency"].includes(label)) : cards;
+  const plots = decision
+    ? [["calls_per_second", "Completed calls / sec"], ["calls_per_minute", "Completed calls / min"], ["requests", "Observed tasks"], ["total_ms", "Compute latency"]]
+    : [["aggregate_tps", "Aggregate output tok/s"], ["calls_per_second", "Completed calls / sec"], ["calls_per_minute", "Completed calls / min"],
+      ["aggregate_input_tps", "Aggregate input tok/s"], ["aggregate_prefill_tps", "Aggregate evaluated input tok/s"],
+      ["requests", "Observed tasks"], ["input_tokens", "Input tokens"], ["output_tokens", "Output tokens"],
+      ["cache_hit_rate", "Cache hit rate"], ["draft_acceptance", "Draft acceptance"],
+      ["prefill_tps", "Prefill tok/s"], ["generation_tps", "Per-task generation tok/s"], ["total_ms", "Compute latency"]];
+  const previousPlot = $("telemetry-plot").value;
+  $("telemetry-plot").replaceChildren(...plots.map(([value, label]) => h("option", { value }, label)));
+  $("telemetry-plot").value = plots.some(([value]) => value === previousPlot) ? previousPlot : plots[0][0];
+  $("telemetry-metrics").replaceChildren(...visibleCards.map(([label, value, detail]) =>
     h("article", { class: "panel metric-card" }, h("span", { class: "label" }, label),
       h("strong", {}, value), h("span", { class: "muted" }, detail))));
   $("telemetry-limitations").replaceChildren(...data.limitations.map((text) => h("li", {}, text)));
@@ -59,19 +88,31 @@ function telemetryTable(headers, rows, empty) {
 }
 
 function renderTelemetryTables() {
+  const decisionOnly = telemetryDecisionOnly();
   $("telemetry-models").replaceChildren(telemetryTable(
-    ["Model", "Requests", "Input (known)", "Output (known)", "Cache hit", "Draft acceptance", "Prefill tok/s", "Generation tok/s"],
+    decisionOnly ? ["Model", "Requests", "Calls/s (60s)", "RPM (60s)", "Compute ms"] :
+      ["Model", "Requests", "Calls/s (60s)", "RPM (60s)", "Aggregate tok/s (60s)", "Input tok/s (60s)", "Evaluated input tok/s (60s)", "Input (known)", "Output (known)", "Cache hit", "Draft acceptance", "Prefill tok/s", "Per-task generation tok/s"],
     telemetryData.models.map((row) => [
       h("button", { class: "ghost-button model-filter", onclick: () => {
         $("telemetry-model").value = telemetryModelValue(row.model);
         telemetryVersion += 1;
         void refreshObservability();
       } }, row.model ?? "Unattributed"),
-      metricNumber(row.requests), metricNumber(row.input_tokens), metricNumber(row.output_tokens),
-      metricPercent(row.cache_hit_rate), metricPercent(row.draft_acceptance),
-      metricNumber(row.prefill_tps, "", 1), metricNumber(row.generation_tps, "", 1),
-    ]), "No observed activity in this time range. Start the router and send a request directly to llama.cpp."));
-  $("telemetry-history").replaceChildren(telemetryTable(
+      metricNumber(row.requests), metricNumber(row.calls_per_second, "", 2), metricNumber(row.calls_per_minute, "", 1),
+      ...[row.aggregate_tps, row.aggregate_input_tps, row.aggregate_prefill_tps, row.input_tokens, row.output_tokens].map((value) => telemetryDecision(row.model) ? "-" : metricNumber(value, "", 1)),
+      telemetryDecision(row.model) ? "-" : metricPercent(row.cache_hit_rate),
+      telemetryDecision(row.model) ? "-" : metricPercent(row.draft_acceptance),
+      telemetryDecision(row.model) ? "-" : metricNumber(row.prefill_tps, "", 1),
+      telemetryDecision(row.model) ? "-" : metricNumber(row.generation_tps, "", 1),
+    ].filter((_, index) => !decisionOnly || index < 4).concat(
+      decisionOnly ? [metricNumber(row.total_ms, "", 1)] : [])),
+    "No observed activity in this time range. Start the router and send a request directly to llama.cpp."));
+  $("telemetry-history").replaceChildren(telemetryDecisionOnly() ? telemetryTable(
+    ["Time", "Model", "Slot / task", "Capture", "Completed at", "Compute ms"],
+    telemetryData.history.map((row) => [telemetryDate(row.started_at), row.model ?? "Unattributed",
+      `${row.slot} / ${row.task}`, row.status.replaceAll("_", " "),
+      row.ended_at == null ? "-" : telemetryDate(row.ended_at), metricNumber(row.total_ms, "", 1)]),
+    "No calls captured yet.") : telemetryTable(
     ["Time", "Model", "Slot / task", "Capture", "Input", "Evaluated", "Output", "Cached", "Draft / accepted", "Prefill ms", "Generation ms"],
     telemetryData.history.map((row) => [
       telemetryDate(row.started_at), row.model ?? "Unattributed", `${row.slot} / ${row.task}`,
@@ -95,7 +136,8 @@ function renderTelemetryChart() {
   const points = new Map(series.map((row) => [row.timestamp, row[field]]));
   const dense = [];
   for (let stamp = series[0].timestamp; stamp <= series.at(-1).timestamp; stamp += step) {
-    dense.push({ stamp, value: points.has(stamp) ? points.get(stamp) : field === "requests" ? 0 : null });
+    dense.push({ stamp, value: points.has(stamp) ? points.get(stamp) :
+      ["requests", "calls_per_second", "calls_per_minute"].includes(field) ? 0 : null });
   }
   if (!dense.some((point) => point.value !== null)) {
     $("telemetry-chart").replaceChildren(h("p", { class: "muted",

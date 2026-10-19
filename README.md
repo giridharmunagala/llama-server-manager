@@ -269,6 +269,23 @@ filter the entire dashboard. Collection runs even with the browser closed.
 No client URLs, handshakes, request bodies or responses pass through the
 manager.
 
+Decision-model filters show completed calls per second, RPM and compute
+latency instead of token-generation metrics, using the preset's decision
+tag or live decision capability. Call rates count observed completed slot
+tasks (including those without token timings), not verified HTTP successes.
+
+**Aggregate output throughput** sums output completed across all workers and
+parallel slots over the last 60 seconds, divided by 60 wall-clock seconds.
+The model comparison includes this combined rate for each model. It is not
+the per-task generation speed, which divides tokens by summed generation
+compute time and therefore does not measure parallel throughput. Chart rates
+use each wall-clock bucket's duration (elapsed duration for the current bucket).
+Tokens are credited when a task completes, not as each token streams.
+**Aggregate input throughput** uses known full input counts, including cached
+tokens; **aggregate evaluated input throughput** excludes cache reuse. Both
+sum across parallel workers/slots over the same wall-clock window and credit
+input when the task completes. Missing input measurements remain unknown.
+
 The collector recognizes llama.cpp's slot/task timing lines, strips terminal
 colors, and correlates router worker-port prefixes with model spawn/proxy
 messages. Concurrent slots and worker restarts are kept separate. Unknown

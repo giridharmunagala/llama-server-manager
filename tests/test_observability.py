@@ -154,6 +154,36 @@ class LogTests(ManagerFixture, unittest.TestCase):
         single.feed("slot release: id 0 | task 0 | stop processing: n_tokens = 0, truncated = 0")
         self.assertEqual(self.store.summary("single-model")["history"][0]["status"], "unmeasured")
 
+    def test_parallel_wall_clock_throughput_and_completed_call_rates(self):
+        with patch("observability.time.time", return_value=1200):
+            for port in range(1448, 1452):
+                self.reader.feed(f"srv load: spawning server instance with name=gemma on port {port}")
+                self.request(port=port, output=60)
+            self.line("processing task", task=1)
+            self.line("stop processing: n_tokens = 0", task=1)
+            self.line("processing task", task=2)
+            self.reader.close()
+        with patch("observability.time.time", return_value=1230):
+            data = self.store.summary("gemma", "1h")
+            self.assertEqual(data["totals"]["completed"], 5)
+            self.assertEqual(data["totals"]["calls_per_minute"], 5)
+            self.assertAlmostEqual(data["totals"]["calls_per_second"], 5 / 60)
+            self.assertEqual(data["totals"]["aggregate_tps"], 4)
+            self.assertEqual(data["models"][0]["aggregate_tps"], 4)
+            self.assertEqual(data["totals"]["aggregate_input_tps"], 8)
+            self.assertAlmostEqual(data["totals"]["aggregate_prefill_tps"], 320 / 60)
+            self.assertEqual(data["models"][0]["aggregate_input_tps"], 8)
+            self.assertEqual(data["series"][0]["aggregate_input_tps"], 16)
+            self.assertEqual(data["totals"]["generation_tps"], 300)
+            self.assertAlmostEqual(data["series"][0]["calls_per_second"], 5 / 30)
+        with patch("observability.time.time", return_value=1261):
+            totals = self.store.summary("gemma")["totals"]
+            self.assertEqual(totals["completed"], 0)
+            self.assertEqual(totals["calls_per_second"], 0)
+            self.assertIsNone(totals["aggregate_tps"])
+            self.assertIsNone(totals["aggregate_input_tps"])
+            self.assertIsNone(totals["aggregate_prefill_tps"])
+
 
 class DirectCaptureTests(RouterFixture, unittest.TestCase):
     def test_direct_client_capture_survives_stop_and_manager_close(self):
